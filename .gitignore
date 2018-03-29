@@ -1,0 +1,10 @@
+.vs/
+packages/
+*/obj/
+*/bin/
+/*.pdb
+/*.xml
+/*.dll
+/*.config
+!System.Configuration.Install.dll
+!System.ComponentModel.DataAnnotations.dll
