@@ -1,10 +1,11 @@
 .vs/
 packages/
-*/obj/
-*/bin/
+/src/*/bin/
+/src/*/obj/
 /*.pdb
 /*.xml
 /*.dll
 /*.config
+/*.zip
 !System.Configuration.Install.dll
 !System.ComponentModel.DataAnnotations.dll

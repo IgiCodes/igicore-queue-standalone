@@ -1,37 +1,36 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using CitizenFX.Core;
 using CitizenFX.Core.Native;
-using IgiCore_Queue.Server.Extensions;
 using IgiCore_Queue.Server.Models;
+using Debug = CitizenFX.Core.Debug;
 
 namespace IgiCore_Queue.Server
 {
     public class Server : BaseScript
     {
         private readonly List<QueuePlayer> _queue = new List<QueuePlayer>();
-        private static int _maxClients;
-        private static int _disconnectGrace;
-        private static string _serverName;
+        private static Config _config;
+        private static string _configPath;
 
         public Server()
         {
             try
             {
-                _maxClients = API.GetConvarInt("sv_maxclients", 32);
-                _disconnectGrace = API.GetConvarInt("igi_queue_disconnectGrace", 60);
-                _serverName = API.GetConvar("sv_hostname", "");
+                _configPath = API.GetConvar("igi_queue_config", "queueSettings.yml");
+                _config = Config.Load(_configPath);
 
-                DebugLog($"Max Clients: {_maxClients}");
-                DebugLog($"Disconnect Grace: {_disconnectGrace}");
+                DebugLog($"Max Clients: {_config.MaxClients}");
+                DebugLog($"Disconnect Grace: {_config.DisconnectGrace}");
                 HandleEvent<Player, string, CallbackDelegate, ExpandoObject>("playerConnecting", OnPlayerConnecting);
                 HandleEvent<Player, string, CallbackDelegate>("playerDropped", OnPlayerDropped);
                 HandleEvent<Player>("igicore:queue:playerActive", OnPlayerActive);
+                HandleEvent<string, List<object>>("rconCommand", OnRconCommand);
+
                 Tick += ProcessQueue;
             }
             catch (Exception e)
@@ -40,6 +39,84 @@ namespace IgiCore_Queue.Server
                 throw;
             }
             
+        }
+
+        private void OnRconCommand(string command, List<object> objargs)
+        {
+            if (command.ToLowerInvariant() != "queue") return;
+            List<string> args = objargs.Cast<string>().ToList();
+
+            switch (args[0].ToLowerInvariant())
+            {
+                case "reload":
+                    string initServerName = _config.ServerName;
+                    _config = Config.Load(_configPath);
+                    _config.ServerName = initServerName;
+                    break;
+                case "clear":
+                    _queue.Clear();
+                    Log("Queue cleared!");
+                    break;
+                case "add":
+                    if (args.Count < 2)
+                    {
+                        Log("Please pass a steam ID to add to the queue");
+                        return;
+                    }
+                    // Check if the player is in the priority list
+                    PriorityPlayer priorityPlayer = _config.PriorityPlayers.FirstOrDefault(p => p.SteamId == args[1]);
+                    // Add to queue
+                    AddToQueue(new QueuePlayer
+                        {
+                            SteamId = args[1],
+                            Name = $"Manual Player - {args[1]}",
+                            ConnectCount = 1,
+                            ConnectTime = DateTime.UtcNow,
+                            DisconnectTime = DateTime.UtcNow,
+                            Status = QueueStatus.Disconnected,
+                            Priority = priorityPlayer?.Priority ?? 100
+                        }
+                    );
+                    break;
+                case "status":
+                    Log("Queue:");
+                    foreach (QueuePlayer queuePlayer in _queue)
+                    {
+                        Log($"{_queue.IndexOf(queuePlayer) + 1}: " +
+                            $"{queuePlayer.Name} - {queuePlayer.SteamId} " +
+                            $"[Priority: {queuePlayer.Priority}] " +
+                            $"[Status: {Enum.GetName(typeof(QueueStatus), queuePlayer.Status)}] " +
+                            $"[Connected: {queuePlayer.ConnectTime.ToLocalTime()}]");
+                    }
+                    break;
+                case "move":
+                    if (args.Count < 2)
+                    {
+                        Log("Please pass a steam ID to move");
+                        return;
+                    }
+
+                    QueuePlayer playerInQueue = _queue.FirstOrDefault(p => p.SteamId == args[1]);
+                    if (playerInQueue == null)
+                    {
+                        Log("Player not found in queue");
+                        return;
+                    }
+
+                    if (args.Count < 3) args.Add("1"); // Default to first in queue
+
+                    _queue.Remove(playerInQueue);
+                    _queue.Insert(int.Parse(args[2]) - 1, playerInQueue);
+
+                    Log($"Moved player {playerInQueue.Name} ({playerInQueue.SteamId}) to position {args[2]}");
+
+                    break;
+                default:
+                    Log("No such command exists");
+                    break;
+            }
+
+            Function.Call(Hash.CANCEL_EVENT);
         }
 
         private void OnPlayerConnecting([FromSource] Player player, string name, CallbackDelegate kickReason, ExpandoObject deferrals)
@@ -66,7 +143,10 @@ namespace IgiCore_Queue.Server
                 }
             
                 // Slot available, don't bother with the queue.
-                if (this.Players.Count() < _maxClients) return;
+                if (this.Players.Count() < _config.MaxClients) return;
+
+                // Check if the player is in the priority list
+                PriorityPlayer priorityPlayer = _config.PriorityPlayers.FirstOrDefault(p => p.SteamId == player.Identifiers["steam"]);
 
                 // Add to queue
                 queuePlayer = new QueuePlayer()
@@ -75,14 +155,11 @@ namespace IgiCore_Queue.Server
                     Name = player.Name,
                     ConnectCount = 1,
                     ConnectTime = DateTime.UtcNow,
-                    Deferrals = deferrals
-                };    
-                _queue.Add(queuePlayer);
+                    Deferrals = deferrals,
+                    Priority = priorityPlayer?.Priority ?? 100
+                };
 
-                DebugLog($"Added {name} to the queue [{_queue.IndexOf(queuePlayer) + 1}/{_queue.Count}]");
-                ((CallbackDelegate)queuePlayer.Deferrals.ToList()[0].Value)();
-                ((CallbackDelegate)queuePlayer.Deferrals.ToList()[2].Value)("Connecting");
-
+                AddToQueue(queuePlayer);
             }
             catch (Exception e)
             {
@@ -120,6 +197,19 @@ namespace IgiCore_Queue.Server
             }
         }
 
+        private void AddToQueue(QueuePlayer player)
+        {
+            // Find out where to insert them in the queue.
+            int queuePosition = _queue.FindLastIndex(p => p.Priority <= player.Priority) + 1;
+
+            _queue.Insert(queuePosition, player);
+
+            DebugLog($"Added {player.Name} to the queue with priority {player.Priority} [{_queue.IndexOf(player) + 1}/{_queue.Count}]");
+            if (player.Deferrals == null) return;
+            ((CallbackDelegate)player.Deferrals.ToList()[0].Value)();
+            ((CallbackDelegate)player.Deferrals.ToList()[2].Value)("Connecting");
+        }
+
 
         private async Task ProcessQueue()
         {
@@ -128,43 +218,46 @@ namespace IgiCore_Queue.Server
                 foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status != QueueStatus.Connecting).ToList())
                 {
                     // Let in player if first in queue and server has a slot
-                    if (_queue.IndexOf(queuePlayer) == 0 && this.Players.Count() < _maxClients)
+                    if (_queue.IndexOf(queuePlayer) == 0 && this.Players.Count() < _config.MaxClients)
                     {
-                        ((CallbackDelegate)queuePlayer.Deferrals.ToList()[1].Value)();
+                        ((CallbackDelegate) queuePlayer.Deferrals?.ToList()[1].Value)?.Invoke();
                         queuePlayer.Status = QueueStatus.Connecting;
                         DebugLog($"Letting in player: {queuePlayer.Name}");
                         continue;
                     }
                     // Defer the player until there is a slot available and they're first in queue.
-                    ((CallbackDelegate)queuePlayer.Deferrals.ToList()[0].Value)();
-                    ((CallbackDelegate)queuePlayer.Deferrals.ToList()[2].Value)($"[{_queue.IndexOf(queuePlayer) + 1}/{_queue.Count}] In queue to connect.{queuePlayer.Dots}");
+                    if (queuePlayer.Status != QueueStatus.Queued) continue;
+                    ((CallbackDelegate) queuePlayer.Deferrals.ToList()[0].Value)();
+                    ((CallbackDelegate) queuePlayer.Deferrals.ToList()[2].Value)(
+                        $"[{_queue.IndexOf(queuePlayer) + 1}/{_queue.Count}] In queue to connect.{queuePlayer.Dots}");
                     queuePlayer.Dots = new string('.', (queuePlayer.Dots.Length + 1) % 3);
                 }
-
                 // Remove players who have been disconnected longer than the grace period
-                foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status == QueueStatus.Disconnected && DateTime.UtcNow.Subtract(p.DisconnectTime).TotalSeconds > _disconnectGrace).ToList())
+                foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status == QueueStatus.Disconnected && DateTime.UtcNow.Subtract(p.DisconnectTime).TotalSeconds > _config.DisconnectGrace).ToList())
                 {
+                    DebugLog($"Disconnect grace expired for player: {queuePlayer.Name}  {queuePlayer.SteamId}");
                     _queue.Remove(queuePlayer);
                 }
-
                 // Update the servername
-                API.SetConvar("sv_hostname", _queue.Count > 0 ? $"{_serverName} [Queue: {_queue.Count}]" : _serverName);
+                API.SetConvar("sv_hostname", _queue.Count > 0 ? $"{_config.ServerName} [Queue: {_queue.Count}]" : _config.ServerName);
             }
             catch (Exception e)
             {
                 Log(e.Message);
+                Log(e.InnerException?.Message);
+                DebugLog(e.StackTrace);
             }
 
             await Delay(500);
         }
 
         [System.Diagnostics.Conditional("DEBUG")]
-        private static void DebugLog(string message)
+        public static void DebugLog(string message)
         {
             Debug.WriteLine($"{DateTime.Now:s} [SERVER:QUEUE]: {message}");
         }
 
-        private static void Log(string message)
+        public static void Log(string message)
         {
             Debug.WriteLine($"{DateTime.Now:s} [SERVER:QUEUE]: {message}");
         }
