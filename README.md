@@ -49,10 +49,15 @@ DisconnectGrace: 30 # In seconds
 There are few commands available to you via RCON (or the server terminal), all prefixed with the `queue` commands.
 
 `queue status` - Output the current queue.
+
 `queue clear` - Clear the current queue (people will have to reconnect).
+
 `queue reload` - Reload the queue settings file.
+
 `queue add <steamid>` - Manually insert a steamid into the queue (useful for debugging purposes).
+
 `queue remove <steamid>` - Remove a specific steamid from the queue.
+
 `queue move <steamid> [position]` - Move a specific steamid to a position in the queue (defaults to 1st in queue if not passed a position).
 
 
