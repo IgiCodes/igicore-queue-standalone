@@ -38,7 +38,7 @@ PriorityPlayers:  # List of players with a custom priority value (Anyone not in 
       Priority: 10  # Lower number == higher priority
 
     - SteamId:  1100001056a8b13
-    - Priority: 50
+      Priority: 50
 
     # ... More players here
 
