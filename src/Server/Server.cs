@@ -54,6 +54,10 @@ namespace IgiCore_Queue.Server
                     _config.ServerName = initServerName;
                     break;
                 case "clear":
+                    foreach (QueuePlayer playerToClear in _queue)
+                    {
+                        ((CallbackDelegate)playerToClear.Deferrals?.ToList()[1].Value)?.Invoke("Queue reset");
+                    }
                     _queue.Clear();
                     Log("Queue cleared!");
                     break;
@@ -78,6 +82,23 @@ namespace IgiCore_Queue.Server
                         }
                     );
                     break;
+                case "remove":
+                    if (args.Count < 2)
+                    {
+                        Log("Please pass a steam ID to remove from the queue");
+                        return;
+                    }
+                    QueuePlayer playerToRemove = _queue.FirstOrDefault(p => p.SteamId == args[1]);
+                    if (playerToRemove == null)
+                    {
+                        Log("Player not found in queue");
+                        return;
+                    }
+
+                    ((CallbackDelegate)playerToRemove.Deferrals?.ToList()[1].Value)?.Invoke("Force removed from queue.");
+                    _queue.Remove(playerToRemove);
+                    Log($"Player {playerToRemove.Name} ({playerToRemove.SteamId}) removed from queue");
+                    break;
                 case "status":
                     Log("Queue:");
                     foreach (QueuePlayer queuePlayer in _queue)
@@ -96,8 +117,8 @@ namespace IgiCore_Queue.Server
                         return;
                     }
 
-                    QueuePlayer playerInQueue = _queue.FirstOrDefault(p => p.SteamId == args[1]);
-                    if (playerInQueue == null)
+                    QueuePlayer playerToMove = _queue.FirstOrDefault(p => p.SteamId == args[1]);
+                    if (playerToMove == null)
                     {
                         Log("Player not found in queue");
                         return;
@@ -105,10 +126,10 @@ namespace IgiCore_Queue.Server
 
                     if (args.Count < 3) args.Add("1"); // Default to first in queue
 
-                    _queue.Remove(playerInQueue);
-                    _queue.Insert(int.Parse(args[2]) - 1, playerInQueue);
+                    _queue.Remove(playerToMove);
+                    _queue.Insert(int.Parse(args[2]) - 1, playerToMove);
 
-                    Log($"Moved player {playerInQueue.Name} ({playerInQueue.SteamId}) to position {args[2]}");
+                    Log($"Moved player {playerToMove.Name} ({playerToMove.SteamId}) to position {args[2]}");
 
                     break;
                 default:
