@@ -42,7 +42,8 @@ PriorityPlayers:  # List of players with a custom priority value (Anyone not in 
 
     # ... More players here
 
-DisconnectGrace: 30 # In seconds
+DisconnectGrace: 30   # In seconds
+QueueWhenNotFull: false   # Set to 'true' to force players in one by one, even when the server isn't full
 ```
 
 # Commands

@@ -13,6 +13,7 @@ namespace IgiCore_Queue.Server.Models
         public List<PriorityPlayer> PriorityPlayers { get; set; } = new List<PriorityPlayer>();
         public int DisconnectGrace { get; set; } = 60;
         public int MaxClients { get; set; }
+        public bool QueueWhenNotFull { get; set; } = false;
         public string ServerName { get; set; }
 
         public Config()

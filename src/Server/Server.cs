@@ -24,8 +24,9 @@ namespace IgiCore_Queue.Server
                 _configPath = API.GetConvar("igi_queue_config", "queueSettings.yml");
                 _config = Config.Load(_configPath);
 
-                DebugLog($"Max Clients: {_config.MaxClients}");
-                DebugLog($"Disconnect Grace: {_config.DisconnectGrace}");
+                Log($"Max Clients: {_config.MaxClients}");
+                Log($"Disconnect Grace: {_config.DisconnectGrace}");
+                Log($"Queue when not full: {_config.QueueWhenNotFull}");
                 HandleEvent<Player, string, CallbackDelegate, ExpandoObject>("playerConnecting", OnPlayerConnecting);
                 HandleEvent<Player, string, CallbackDelegate>("playerDropped", OnPlayerDropped);
                 HandleEvent<Player>("igicore:queue:playerActive", OnPlayerActive);
@@ -162,9 +163,9 @@ namespace IgiCore_Queue.Server
 
                     return;
                 }
-            
+                
                 // Slot available, don't bother with the queue.
-                if (this.Players.Count() < _config.MaxClients) return;
+                if (this.Players.Count() < _config.MaxClients && !_config.QueueWhenNotFull) return;
 
                 // Check if the player is in the priority list
                 PriorityPlayer priorityPlayer = _config.PriorityPlayers.FirstOrDefault(p => p.SteamId == player.Identifiers["steam"]);
@@ -179,7 +180,7 @@ namespace IgiCore_Queue.Server
                     Deferrals = deferrals,
                     Priority = priorityPlayer?.Priority ?? 100
                 };
-
+                
                 AddToQueue(queuePlayer);
             }
             catch (Exception e)
@@ -207,6 +208,7 @@ namespace IgiCore_Queue.Server
 
         private void OnPlayerActive([FromSource] Player player)
         {
+            DebugLog($"Player connected, removing from queue: {player.Name}");
             try
             {
                 QueuePlayer queuePlayer = _queue.FirstOrDefault(p => p.SteamId == player.Identifiers["steam"]);

@@ -11,6 +11,7 @@ namespace IgiCore_Queue.Client
 {
     public class Client : BaseScript
     {
+        private static bool IsConnected { get; set; } = false;
 
         public Client()
         {
@@ -21,7 +22,11 @@ namespace IgiCore_Queue.Client
         {
             if (NetworkIsSessionStarted())
             {
-                TriggerServerEvent("igicore:queue:playerActive");
+                if (!Client.IsConnected)
+                {
+                    Client.IsConnected = true;
+                    TriggerServerEvent("igicore:queue:playerActive");
+                }
             }
             await Delay(1);
         }
