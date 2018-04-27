@@ -26,6 +26,7 @@ namespace IgiCore_Queue.Server
 
                 Log($"Max Clients: {_config.MaxClients}");
                 Log($"Disconnect Grace: {_config.DisconnectGrace}");
+                Log($"Connection Timeout: {_config.ConnectionTimeout}");
                 Log($"Queue when not full: {_config.QueueWhenNotFull}");
                 HandleEvent<Player, string, CallbackDelegate, ExpandoObject>("playerConnecting", OnPlayerConnecting);
                 HandleEvent<Player, string, CallbackDelegate>("playerDropped", OnPlayerDropped);
@@ -75,8 +76,8 @@ namespace IgiCore_Queue.Server
                         {
                             SteamId = args[1],
                             Name = $"Manual Player - {args[1]}",
-                            ConnectCount = 1,
-                            ConnectTime = DateTime.UtcNow,
+                            JoinCount = 1,
+                            JoinTime = DateTime.UtcNow,
                             DisconnectTime = DateTime.UtcNow,
                             Status = QueueStatus.Disconnected,
                             Priority = priorityPlayer?.Priority ?? 100
@@ -108,7 +109,7 @@ namespace IgiCore_Queue.Server
                             $"{queuePlayer.Name} - {queuePlayer.SteamId} " +
                             $"[Priority: {queuePlayer.Priority}] " +
                             $"[Status: {Enum.GetName(typeof(QueueStatus), queuePlayer.Status)}] " +
-                            $"[Connected: {queuePlayer.ConnectTime.ToLocalTime()}]");
+                            $"[Joined: {queuePlayer.JoinTime.ToLocalTime()}]");
                     }
                     break;
                 case "move":
@@ -133,8 +134,17 @@ namespace IgiCore_Queue.Server
                     Log($"Moved player {playerToMove.Name} ({playerToMove.SteamId}) to position {args[2]}");
 
                     break;
+                case "help":
+                    Log("IgiCore - Queue: Help" + Environment.NewLine +
+                        "                         reload: Reload the queue config file" + Environment.NewLine +
+                        "                          clear: Force remove all currently queued players" + Environment.NewLine +
+                        "                  add <steamid>: Manually insert a steamid into the queue (useful for debugging purposes)" + Environment.NewLine +
+                        "         queue remove <steamid>: Remove a specific steamid from the queue" + Environment.NewLine +
+                        "queue move <steamid> [position]: Move a specific steamid to a position in the queue (defaults to 1st in queue if not passed a position)"
+                    );
+                    break;
                 default:
-                    Log("No such command exists");
+                    Log("No such command exists, please type 'queue help' for help.");
                     break;
             }
 
@@ -155,7 +165,8 @@ namespace IgiCore_Queue.Server
                     // Player had a slot in the queue, give them it back.
                     DebugLog($"Player found in queue: {queuePlayer.Name}");
                     queuePlayer.Status = QueueStatus.Queued;
-                    queuePlayer.ConnectCount++;
+                    queuePlayer.ConnectTime = new DateTime();
+                    queuePlayer.JoinCount++;
                     queuePlayer.Deferrals = deferrals;
 
                     ((CallbackDelegate)queuePlayer.Deferrals.ToList()[0].Value)();
@@ -175,8 +186,8 @@ namespace IgiCore_Queue.Server
                 {
                     SteamId = player.Identifiers["steam"],
                     Name = player.Name,
-                    ConnectCount = 1,
-                    ConnectTime = DateTime.UtcNow,
+                    JoinCount = 1,
+                    JoinTime = DateTime.UtcNow,
                     Deferrals = deferrals,
                     Priority = priorityPlayer?.Priority ?? 100
                 };
@@ -245,6 +256,7 @@ namespace IgiCore_Queue.Server
                     {
                         ((CallbackDelegate) queuePlayer.Deferrals?.ToList()[1].Value)?.Invoke();
                         queuePlayer.Status = QueueStatus.Connecting;
+                        queuePlayer.ConnectTime = DateTime.UtcNow;
                         DebugLog($"Letting in player: {queuePlayer.Name}");
                         continue;
                     }
@@ -261,6 +273,12 @@ namespace IgiCore_Queue.Server
                     DebugLog($"Disconnect grace expired for player: {queuePlayer.Name}  {queuePlayer.SteamId}");
                     _queue.Remove(queuePlayer);
                 }
+                // Remove players who have been connecting longer than the connect timeout
+                foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status == QueueStatus.Connecting && DateTime.UtcNow.Subtract(p.ConnectTime).TotalSeconds > _config.ConnectionTimeout).ToList())
+                {
+                    DebugLog($"Connect timeout expired for player: {queuePlayer.Name}  {queuePlayer.SteamId}");
+                    _queue.Remove(queuePlayer);
+                }
                 // Update the servername
                 API.SetConvar("sv_hostname", _queue.Count > 0 ? $"{_config.ServerName} [Queue: {_queue.Count}]" : _config.ServerName);
             }
@@ -271,7 +289,7 @@ namespace IgiCore_Queue.Server
                 DebugLog(e.StackTrace);
             }
 
-            await Delay(500);
+            await Delay(200);
         }
 
         [System.Diagnostics.Conditional("DEBUG")]
