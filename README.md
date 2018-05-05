@@ -11,7 +11,7 @@ Downloads can be found on the [Releases](https://github.com/Igirisujin/igicore-q
 Follow the instructions on the release on how to install.
 
 # Config
-Use the `igi_config_path` to define the path to the queue settings YAML file. This can be a full path or the path relative to where you launch the server from (e.g. where your startserver.sh is).
+Use the `igi_queue_config` to define the path to the queue settings YAML file. This can be a full path or the path relative to where you launch the server from (e.g. where your startserver.sh is).
 
 ```lua
 sv_maxclients = 32      # Default FiveM convar for max connected players
