@@ -17,6 +17,8 @@ Use the `igi_queue_config` to define the path to the queue settings YAML file. T
 sv_maxclients = 32      # Default FiveM convar for max connected players
 
 set igi_queue_config "resources/[IgiCore]/igicore-queue/queueSettings.yml"  # Path to the config file relative to where you launch the server
+
+start igicore-queue # THIS MUST BE AFTER THE ABOVE CONFIG LINES!
 ```
 
 Remove the default fivem `hardcap` resource from your server.cfg. This resource replaces it's functionality and it may interfere.
