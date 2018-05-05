@@ -33,7 +33,7 @@ The release zip contains an example for the queueSettings.yml file. This file al
 `DisconnectGrace` is how long in seconds a player can disconnect from the queue and keep their spot until they reconnect (Default: 60).
 `MaxClients` is also an extra value you can specify to override what the queue thinks the server's max client limit is (Default: this will be read from the sv_maxclients convar in your server.cfg). Useful for debugging purposes.
 `QueueWhenNotFull` will determine whether or not to queue players even when the server isn't full; essentially only letting one player in at a time (Default: false).
-`ConnectingTimeout` is how long in seconds a player can take to connect to the server from the queue (Default 120). Sometimes clients get stuck "connecting" and this causes everyone else to get stuck in the queue until manually reset.
+`ConnectionTimeout` is how long in seconds a player can take to connect to the server from the queue (Default 120). Sometimes clients get stuck "connecting" and this causes everyone else to get stuck in the queue until manually reset.
 
 Example file:
 ```yml
@@ -48,7 +48,7 @@ PriorityPlayers:  # List of players with a custom priority value (Anyone not in 
 
 DisconnectGrace: 60   # In Seconds
 QueueWhenNotFull: false   # true/false
-ConnectingTimeout: 120   # In Seconds
+ConnectionTimeout: 120   # In Seconds
 ```
 
 # Commands
