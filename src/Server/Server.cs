@@ -289,7 +289,7 @@ namespace IgiCore_Queue.Server
                 DebugLog(e.StackTrace);
             }
 
-            await Delay(_config.DefferalDelay);
+            await Delay(_config.DeferalDelay);
         }
 
         [System.Diagnostics.Conditional("DEBUG")]
