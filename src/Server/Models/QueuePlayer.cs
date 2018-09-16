@@ -6,6 +6,7 @@ namespace IgiCore_Queue.Server.Models
 {
     public class QueuePlayer : IPlayer
     {
+	    public int Handle { get; set; }
         public ExpandoObject Deferrals { get; set; }
         public string Dots { get; set; } = "";
         public QueueStatus Status { get; set; } = QueueStatus.Queued;

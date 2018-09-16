@@ -46,9 +46,10 @@ namespace IgiCore_Queue.Server
         private void OnRconCommand(string command, List<object> objargs)
         {
             if (command.ToLowerInvariant() != "queue") return;
-            List<string> args = objargs.Cast<string>().ToList();
-
-            switch (args[0].ToLowerInvariant())
+	        Function.Call(Hash.CANCEL_EVENT);
+			List<string> args = objargs.Cast<string>().ToList();
+	        if (args.Count == 0) args.Add("help");
+            switch (args.First().ToLowerInvariant())
             {
                 case "reload":
                     string initServerName = _config.ServerName;
@@ -147,9 +148,7 @@ namespace IgiCore_Queue.Server
                     Log("No such command exists, please type 'queue help' for help.");
                     break;
             }
-
-            Function.Call(Hash.CANCEL_EVENT);
-        }
+		}
 
         private void OnPlayerConnecting([FromSource] Player player, string name, CallbackDelegate kickReason, ExpandoObject deferrals)
         {
@@ -164,6 +163,7 @@ namespace IgiCore_Queue.Server
                 {
                     // Player had a slot in the queue, give them it back.
                     DebugLog($"Player found in queue: {queuePlayer.Name}");
+	                queuePlayer.Handle = int.Parse(player.Handle);
                     queuePlayer.Status = QueueStatus.Queued;
                     queuePlayer.ConnectTime = new DateTime();
                     queuePlayer.JoinCount++;
@@ -184,6 +184,7 @@ namespace IgiCore_Queue.Server
                 // Add to queue
                 queuePlayer = new QueuePlayer()
                 {
+					Handle = int.Parse(player.Handle),
                     SteamId = player.Identifiers["steam"],
                     Name = player.Name,
                     JoinCount = 1,
@@ -205,17 +206,22 @@ namespace IgiCore_Queue.Server
         {
             try
             {
-                DebugLog($"Disconnected: {player.Name}");
                 QueuePlayer queuePlayer = _queue.FirstOrDefault(p => p.SteamId == player.Identifiers["steam"]);
                 if (queuePlayer == null) return;
-                queuePlayer.Status = QueueStatus.Disconnected;
-                queuePlayer.DisconnectTime = DateTime.UtcNow;
+                OnPlayerDisconnect(queuePlayer, disconnectMessage);
             }
             catch (Exception e)
             {
                 Log(e.Message);
             }
         }
+
+	    private void OnPlayerDisconnect(QueuePlayer queuePlayer, string disconnectMessage)
+	    {
+		    DebugLog($"Disconnected: {queuePlayer.Name}");
+			queuePlayer.Status = QueueStatus.Disconnected;
+		    queuePlayer.DisconnectTime = DateTime.UtcNow;
+		}
 
         private void OnPlayerActive([FromSource] Player player)
         {
@@ -251,8 +257,8 @@ namespace IgiCore_Queue.Server
             {
                 foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status != QueueStatus.Connecting).ToList())
                 {
-                    // Let in player if first in queue and server has a slot
-                    if (_queue.IndexOf(queuePlayer) == 0 && this.Players.Count() < _config.MaxClients)
+					// Let in player if first in queue and server has a slot
+					if (_queue.IndexOf(queuePlayer) == 0 && this.Players.Count() < _config.MaxClients)
                     {
                         ((CallbackDelegate) queuePlayer.Deferrals?.ToList()[1].Value)?.Invoke();
                         queuePlayer.Status = QueueStatus.Connecting;
@@ -262,7 +268,6 @@ namespace IgiCore_Queue.Server
                     }
                     // Defer the player until there is a slot available and they're first in queue.
                     if (queuePlayer.Status != QueueStatus.Queued) continue;
-                    ((CallbackDelegate) queuePlayer.Deferrals.ToList()[0].Value)();
                     ((CallbackDelegate) queuePlayer.Deferrals.ToList()[2].Value)(
                         $"[{_queue.IndexOf(queuePlayer) + 1}/{_queue.Count}] In queue to connect.{queuePlayer.Dots}");
                     queuePlayer.Dots = new string('.', (queuePlayer.Dots.Length + 1) % 3);
@@ -279,6 +284,11 @@ namespace IgiCore_Queue.Server
                     DebugLog($"Connect timeout expired for player: {queuePlayer.Name}  {queuePlayer.SteamId}");
                     _queue.Remove(queuePlayer);
                 }
+				// Remove players who have timed out
+	            foreach (QueuePlayer queuePlayer in _queue.Where(p => p.Status != QueueStatus.Disconnected && API.GetPlayerLastMsg(p.Handle.ToString()) > TimeSpan.FromSeconds(_config.ConnectionTimeout).TotalMilliseconds).ToList())
+	            {
+					OnPlayerDisconnect(_queue.First(p => p.SteamId == queuePlayer.SteamId), "Timed out");
+				}
                 // Update the servername
                 API.SetConvar("sv_hostname", _queue.Count > 0 ? $"{_config.ServerName} [Queue: {_queue.Count}]" : _config.ServerName);
             }
