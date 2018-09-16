@@ -1,3 +1,8 @@
+
+> This resource is no longer being actively developed. I will try and keep it functioning but I will not be adding anymore features.
+> The project is being continued [as a plugin](https://github.com/NFive/plugin-queue) for [NFive](https://nfive.io)
+
+
 # igicore - Queue [Standalone Edition]
 Standalone queue system for FiveM servers.
 
