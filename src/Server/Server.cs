@@ -137,12 +137,13 @@ namespace IgiCore_Queue.Server
                     break;
                 case "help":
                     Log("IgiCore - Queue: Help" + Environment.NewLine +
-                        "                         reload: Reload the queue config file" + Environment.NewLine +
-                        "                          clear: Force remove all currently queued players" + Environment.NewLine +
-                        "                  add <steamid>: Manually insert a steamid into the queue (useful for debugging purposes)" + Environment.NewLine +
-                        "         queue remove <steamid>: Remove a specific steamid from the queue" + Environment.NewLine +
-                        "queue move <steamid> [position]: Move a specific steamid to a position in the queue (defaults to 1st in queue if not passed a position)"
-                    );
+                        "                   reload: Reload the queue config file" + Environment.NewLine +
+                        "                    clear: Force remove all currently queued players" + Environment.NewLine +
+                        "            add <steamid>: Manually insert a steamid into the queue (useful for debugging purposes)" + Environment.NewLine +
+                        "         remove <steamid>: Remove a specific steamid from the queue" + Environment.NewLine +
+						"move <steamid> [position]: Move a specific steamid to a position in the queue (defaults to 1st in queue if not passed a position)" + Environment.NewLine +
+						"                   status: Display the current list of players in the queue"
+					);
                     break;
                 default:
                     Log("No such command exists, please type 'queue help' for help.");
